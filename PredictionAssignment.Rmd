@@ -1,0 +1,81 @@
+---
+title: "Prediction Assignment"
+author: "Puneet Singla"
+date: "8/1/2021"
+output: html_document
+---
+
+## Background
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our objective will be to determine if participants correctly performed the activity of lifting a dumbell.
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). For our project, we will be using the data from accelerometers on the belt, forearm, arm, and dumbell of these participants.
+
+
+## Data Processing
+
+In the first step, let's download the data from the provided URL.
+
+Next, we will subset the training data to the relevant fields. For starters, we will remove fields with no values or NAs. Then, we will focus on the four key features - Roll, Pitch, Yaw, and total acceleration for each sensor in Arm, Belt, Dumbell, and Forearm for our Machine Learning model.
+
+```{r include=TRUE}
+library(caret)
+set.seed(123)
+
+## Download data files
+training_fl_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+training_fl_nm <- "training.csv"
+if(!file.exists(training_fl_nm)) {download.file(training_fl_url,training_fl_nm)}
+
+## Load the data
+training <- read.csv(training_fl_nm)
+
+## Subset the data to required fields
+training <- training[,grep("^roll|^pitch|^yaw|^total_accel|^classe",names(training))]
+dim(training)
+str(training)
+```
+
+## Build the Model & Cross-validation
+
+Since we only have the training data, we are going to take the following cross-validation approach.
+
+We will divide the training data into two sets:
+
+1. 50% of the data will be used for training the model
+2. 50% of the data will be used for validating the model & calculating out of sample error
+
+```{r include=TRUE}
+## Divide the data in Training & Validation set
+inTrain <- createDataPartition(training$classe, p = 1/2)[[1]]
+training_new <- training[inTrain,]
+validation_new <- training[-inTrain,]
+```
+
+And we will use the K-fold technique to use our new training set to train our model.
+
+As for the model itself, we will use the Random Forest model to train.
+
+```{r model_calc, include=TRUE, cache=FALSE}
+## Use the K-Fold method to train the model on new training set
+mdlctrl <- trainControl(method = "cv", number = 10, savePredictions = "all")
+
+mdlfit <- train(classe ~ ., method="rf", data = training_new, trControl = mdlctrl)
+```
+
+## Evaluate Model Performance
+
+Let's see how are model performed on the training set.
+
+```{r include=TRUE}
+table(training_new$classe, predict(mdlfit,training_new))
+```
+
+Next, let's see performance of our model on the validation set.
+
+```{r include=TRUE}
+table(validation_new$classe,predict(mdlfit,validation_new))
+```
+
+Lastly, out of sample error rate of this model is estimated to be `r paste(round((1-confusionMatrix(validation_new$classe,predict(mdlfit,validation_new))$overall[1])*100,2), "%", sep="")`
+
